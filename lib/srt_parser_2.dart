@@ -1,54 +1,63 @@
+import 'dart:convert' show LineSplitter;
+
+import 'package:collection/collection.dart';
 import 'package:csslib/parser.dart';
 import 'package:meta/meta.dart';
-import 'package:srt_parser/color_map.dart';
-import 'dart:convert' show LineSplitter;
+
+import './color_map.dart';
 
 /// formatting (partial compliance) : https://en.wikipedia.org/wiki/SubRip#Formatting
 class Range {
-  Range(this.begin, this.end);
+  const Range(this.begin, this.end);
 
-  int begin;
-  int end;
+  final int begin;
+  final int end;
 
   Duration get duration => Duration(milliseconds: end - begin);
 }
 
 class HtmlCode {
-  bool i = false;
-  bool u = false;
-  bool b = false;
-  Color fontColor = Color.black;
+  bool? i;
+  bool? u;
+  bool? b;
+  Color? fontColor;
 }
 
 class Coordinates {
-  Coordinates({this.x, this.y});
+  const Coordinates({required this.x, required this.y});
 
   final int x;
   final int y;
 }
 
 class Subtitle {
-  int id;
-  Range range;
-  List<Line> parsedLines = [];
-  List<String> rawLines = [];
+  Subtitle({
+    required this.id,
+    required this.range,
+    required this.rawLines,
+  });
+
+  final int id;
+  final Range range;
+  final List<Line> parsedLines = [];
+  final List<String> rawLines;
 }
 
 class Line {
-  Line(this.rawLine);
+  Line(this.rawLine, {this.coordinates});
 
   final String rawLine;
-  Coordinates coordinates;
+  final Coordinates? coordinates;
 
   // TODO(Arman):Either a whole line has code or subLines have or none
-  List<SubLine> subLines = [];
+  final List<SubLine> subLines = [];
 }
 
 class SubLine {
   SubLine({this.rawString});
 
-  HtmlCode htmlCode = HtmlCode();
-  String rawString;
+  final HtmlCode htmlCode = HtmlCode();
+  final String? rawString;
 }
 
 @visibleForTesting
@@ -67,16 +76,16 @@ void parseHtml(Subtitle subtitle) {
     Iterable<Match> allMatches = detectAll.allMatches(line);
 
     for (Match match in allMatches) {
-      String firstMatch = match.group(1);
+      String? firstMatch = match.group(1);
       // not coded text
       if (match.group(23) != null) {
         subtitle.parsedLines[index].subLines
-            .add(SubLine(rawString: match.group(23)));
+            .add(SubLine(rawString: match.group(23)!));
         continue;
       }
       //Html-coded text
-      else {
-        SubLine subLineWithCode = SubLine();
+      else if (firstMatch != null) {
+        SubLine subLineWithCode = SubLine(rawString: match.group(19));
 
         if (detectI.hasMatch(firstMatch)) {
           subLineWithCode.htmlCode.i = true;
@@ -92,22 +101,24 @@ void parseHtml(Subtitle subtitle) {
         if (detectFont.hasMatch(firstMatch)) {
           //hexColor
           if (match.group(7) != null) {
-            subLineWithCode.htmlCode.fontColor = Color.hex(match.group(7));
+            subLineWithCode.htmlCode.fontColor = Color.hex(match.group(7)!);
           }
           //rgb or rgba
           if (match.group(8) != null) {
-            if (match.group(9) == 'rgb') {
+            if (match.group(9) == 'rgb' &&
+                match.groups([11, 12, 13]).every((g) => g != null)) {
               subLineWithCode.htmlCode.fontColor = Color.createRgba(
-                  int.parse(match.group(11)),
-                  int.parse(match.group(12)),
-                  int.parse(match.group(13)));
+                  int.parse(match.group(11)!),
+                  int.parse(match.group(12)!),
+                  int.parse(match.group(13)!));
             }
-            if (match.group(9) == 'rgba') {
+            if (match.group(9) == 'rgba' &&
+                match.groups([14, 15, 16, 17]).every((g) => g != null)) {
               subLineWithCode.htmlCode.fontColor = Color.createRgba(
-                  int.parse(match.group(14)),
-                  int.parse(match.group(15)),
-                  int.parse(match.group(16)),
-                  num.parse(match.group(17)));
+                  int.parse(match.group(14)!),
+                  int.parse(match.group(15)!),
+                  int.parse(match.group(16)!),
+                  num.parse(match.group(17)!));
             }
           }
 
@@ -118,7 +129,6 @@ void parseHtml(Subtitle subtitle) {
                 .value;
           }
         }
-        subLineWithCode.rawString = match.group(19);
 
         subtitle.parsedLines[index].subLines.add(subLineWithCode);
       }
@@ -133,20 +143,27 @@ void parseCoordinates(Subtitle subtitle, String chunk1) {
   final Iterable<Match> result = detectCoordination.allMatches(chunk1);
 
   if (result.length != 0) {
-    List listOfXs =
+    List<Match> listOfXs =
         result.where((Match match) => match.group(2) == 'X').toList();
 
     //divide by 2 and create a Coordination of each X:Y group
     for (Match item in listOfXs) {
-      int number = int.parse(item.group(3));
-      Match matchingY = result.firstWhere((Match matchY) {
-        return (matchY.group(2) == 'Y' && int.parse(matchY.group(3)) == number);
+      if (item.groups([3, 4]).any((g) => g == null)) continue;
+
+      int number = int.parse(item.group(3)!);
+      Match? matchingY = result.firstWhereOrNull((Match matchY) {
+        if (matchY.group(3) == null) return false;
+
+        return (matchY.group(2) == 'Y' &&
+            int.tryParse(matchY.group(3)!) == number);
       });
+      if (matchingY == null) continue;
 
-      Line parsedLine = Line(subtitle.rawLines[listOfXs.indexOf(item)]);
-      parsedLine.coordinates = Coordinates(
-          x: int.parse(item.group(4)), y: int.parse(matchingY.group(4)));
-
+      final coordinates = Coordinates(
+          x: int.parse(item.group(4) ?? '0'),
+          y: int.parse(matchingY.group(4) ?? '0'));
+      Line parsedLine = Line(subtitle.rawLines[listOfXs.indexOf(item)],
+          coordinates: coordinates);
       subtitle.parsedLines.add(parsedLine);
     }
   } else {
@@ -158,35 +175,36 @@ void parseCoordinates(Subtitle subtitle, String chunk1) {
 }
 
 @visibleForTesting
-Range parseBeginEnd(String line) {
+Range? parseBeginEnd(String line) {
   final RegExp pattern = RegExp(
       r'(\d\d):(\d\d):(\d\d),(\d\d\d) --> (\d\d):(\d\d):(\d\d),(\d\d\d)');
-  final Match match = pattern.firstMatch(line);
+  final Match? match = pattern.firstMatch(line);
 
   if (match == null) {
     return null;
-  } else if (int.parse(match.group(1)) > 23 ||
-      int.parse(match.group(2)) > 59 ||
-      int.parse(match.group(3)) > 59 ||
-      int.parse(match.group(4)) > 999 ||
-      int.parse(match.group(5)) > 23 ||
-      int.parse(match.group(6)) > 59 ||
-      int.parse(match.group(7)) > 59 ||
-      int.parse(match.group(8)) > 999) {
+  } else if (match.groups([1, 2, 3, 4, 5, 6, 7, 8]).any((g) => g == null) ||
+      int.parse(match.group(1)!) > 23 ||
+      int.parse(match.group(2)!) > 59 ||
+      int.parse(match.group(3)!) > 59 ||
+      int.parse(match.group(4)!) > 999 ||
+      int.parse(match.group(5)!) > 23 ||
+      int.parse(match.group(6)!) > 59 ||
+      int.parse(match.group(7)!) > 59 ||
+      int.parse(match.group(8)!) > 999) {
     throw RangeError(
         'time components are out of range. Please modify the .srt file.');
   } else {
     final int begin = timeStampToMillis(
-        int.parse(match.group(1)),
-        int.parse(match.group(2)),
-        int.parse(match.group(3)),
-        int.parse(match.group(4)));
+        int.parse(match.group(1)!),
+        int.parse(match.group(2)!),
+        int.parse(match.group(3)!),
+        int.parse(match.group(4)!));
 
     final int end = timeStampToMillis(
-        int.parse(match.group(5)),
-        int.parse(match.group(6)),
-        int.parse(match.group(7)),
-        int.parse(match.group(8)));
+        int.parse(match.group(5)!),
+        int.parse(match.group(6)!),
+        int.parse(match.group(7)!),
+        int.parse(match.group(8)!));
 
     return Range(begin, end);
   }
@@ -245,10 +263,13 @@ List<Subtitle> parseSrt(String srt) {
   final List<List<String>> splitChunk = splitByEmptyLine(split);
 
   for (List<String> chunk in splitChunk) {
-    final Subtitle subtitle = Subtitle();
-    subtitle.id = int.parse(chunk[0]);
-    subtitle.range = parseBeginEnd(chunk[1]);
-    subtitle.rawLines = chunk.sublist(2);
+    final range = parseBeginEnd(chunk[1]);
+    if (range == null) continue;
+    final Subtitle subtitle = Subtitle(
+      id: int.parse(chunk[0]),
+      range: range,
+      rawLines: chunk.sublist(2),
+    );
     parseCoordinates(subtitle, chunk[1]);
     parseHtml(subtitle);
     result.add(subtitle);

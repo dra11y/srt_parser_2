@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:test/test.dart';
-import '../lib/srt_parser.dart';
+import '../lib/srt_parser_2.dart';
 
 void main() {
   const String data = '''1
@@ -35,7 +35,7 @@ som om han aldrig hade existerat.
     'chunks',
     () {
       final List<List<String>> chunks =
-      splitByEmptyLine(['a', 'b', 'c', '', '123', 'adfasfdsa']);
+          splitByEmptyLine(['a', 'b', 'c', '', '123', 'adfasfdsa']);
       expect(chunks.length, 2);
       expect(chunks[0][2], 'c');
       expect(chunks[1][0], '123');
@@ -44,9 +44,9 @@ som om han aldrig hade existerat.
   test(
     'parseBeginEnd',
     () {
-      final Range result = parseBeginEnd('00:02:31,567 --> 00:02:37,164');
-      expect(result.begin, 151567);
-      expect(result.end, 157164);
+      final Range? result = parseBeginEnd('00:02:31,567 --> 00:02:37,164');
+      expect(result?.begin, 151567);
+      expect(result?.end, 157164);
     },
   );
 
@@ -84,12 +84,12 @@ som om han aldrig hade existerat.
               .subLines[1]
               .htmlCode
               .fontColor
-              .argbValue,
+              ?.argbValue,
           65280);
       expect(
-          parsedSubtitle[0].parsedLines[0].subLines[2].rawString,'kriminella');
+          parsedSubtitle[0].parsedLines[0].subLines[2].rawString, 'kriminella');
       expect(parsedSubtitle[0].parsedLines[0].subLines[0].htmlCode.b, null);
-      expect(parsedSubtitle[0].parsedLines[1].coordinates.x, 500);
+      expect(parsedSubtitle[0].parsedLines[1].coordinates?.x, 500);
       expect(parsedSubtitle[0].parsedLines[0].subLines[2].htmlCode.b, true);
       expect(parsedSubtitle[0].parsedLines[0].subLines[2].htmlCode.u, true);
       expect(parsedSubtitle[0].parsedLines[0].subLines[2].htmlCode.i, null);

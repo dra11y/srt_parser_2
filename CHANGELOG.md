@@ -1,5 +1,5 @@
 ## 2.0.0
-* Support sound null safety and Dart 3.
+* Migrate to null safety.
 
 ## 1.1.0+5
 * maintenance

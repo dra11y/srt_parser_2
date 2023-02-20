@@ -1,4 +1,4 @@
-name: srt_parser
+name: srt_parser_2
 version: 2.0.0
 description: A cross-platform, .srt parser that allows you to read a String containing Html and Coordinates and results to subtitle objects.
 homepage: https://github.com/dra11y/srt_parser_2
@@ -8,6 +8,7 @@ environment:
   sdk: ">=2.19.2 <3.0.0"
 
 dependencies:
+  collection: ^1.17.1
   csslib: ^0.17.2
   meta: ^1.9.0
 
