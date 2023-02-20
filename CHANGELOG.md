@@ -1,3 +1,6 @@
+## 2.0.1
+* Downgrade meta from 1.9.0 to 1.8.0 for Flutter.
+
 ## 2.0.0
 * Migrate to null safety.
 
